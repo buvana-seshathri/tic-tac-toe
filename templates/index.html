@@ -34,6 +34,30 @@
     margin: 0;
     color: var(--muted);
   }
+  #settings {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  #settings label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+  #settings select {
+    font-family: inherit;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
   #status {
     font-size: 0.95rem;
     color: var(--text);
@@ -42,8 +66,6 @@
   }
   #board {
     display: grid;
-    grid-template-columns: repeat(3, 92px);
-    grid-template-rows: repeat(3, 92px);
     gap: 6px;
     background: var(--line);
     padding: 6px;
@@ -54,7 +76,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.4rem;
     font-weight: bold;
     cursor: pointer;
     border-radius: 4px;
@@ -82,12 +103,32 @@
   button:hover:not(:disabled) { opacity: 0.85; }
   #scoreboard { display: flex; gap: 18px; font-size: 0.8rem; color: var(--muted); }
   #scoreboard span.value { color: var(--text); font-weight: bold; margin-left: 4px; }
-  #hint { font-size: 0.75rem; color: var(--muted); text-align: center; max-width: 360px; }
+  #hint { font-size: 0.75rem; color: var(--muted); text-align: center; max-width: 380px; }
 </style>
 </head>
 <body>
   <h1>Tic-Tac-Toe</h1>
-  <div id="status">Your move — you're X</div>
+
+  <div id="settings">
+    <label>
+      Board size
+      <select id="size-select">
+        <option value="3">3 × 3</option>
+        <option value="4">4 × 4</option>
+        <option value="5">5 × 5</option>
+      </select>
+    </label>
+    <label>
+      Difficulty
+      <select id="difficulty-select">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="status">Your move. You're X</div>
 
   <div id="board"></div>
 
@@ -101,36 +142,37 @@
     <div>Draws <span class="value" id="score-draw">0</span></div>
   </div>
 
-  <div id="hint">You're X, AI is O.</div>
-
 <script>
 (() => {
   const HUMAN = 'X', AI = 'O';
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
   const resetBtn = document.getElementById('reset-btn');
+  const sizeSelect = document.getElementById('size-select');
+  const difficultySelect = document.getElementById('difficulty-select');
   const scoreXEl = document.getElementById('score-x');
   const scoreOEl = document.getElementById('score-o');
   const scoreDrawEl = document.getElementById('score-draw');
 
-  const LINES = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6],
-  ];
+  const CELL_PX = { 3: 92, 4: 76, 5: 62 };
+  const FONT_PX = { 3: '2.4rem', 4: '2rem', 5: '1.6rem' };
 
-  let board = Array(9).fill(null);
+  let size = 3;
+  let board = [];
   let gameOver = false;
-  let busy = false; // true while waiting on the backend
+  let busy = false;
   let cells = [];
   let scores = { X: 0, O: 0, draw: 0 };
 
   function buildBoard() {
     boardEl.innerHTML = '';
+    boardEl.style.gridTemplateColumns = `repeat(${size}, ${CELL_PX[size]}px)`;
+    boardEl.style.gridTemplateRows = `repeat(${size}, ${CELL_PX[size]}px)`;
     cells = [];
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < size * size; i++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
+      cell.style.fontSize = FONT_PX[size];
       cell.dataset.index = i;
       cell.addEventListener('click', () => onCellClick(i));
       boardEl.appendChild(cell);
@@ -148,27 +190,16 @@
     });
   }
 
-  function getWinLine(b) {
-    for (const [a, bb, c] of LINES) {
-      if (b[a] && b[a] === b[bb] && b[a] === b[c]) return [a, bb, c];
-    }
-    return null;
-  }
-
-  function highlightWin() {
-    const line = getWinLine(board);
-    if (line) line.forEach(i => cells[i].classList.add('win'));
-  }
-
   function updateScoreboard() {
     scoreXEl.textContent = scores.X;
     scoreOEl.textContent = scores.O;
     scoreDrawEl.textContent = scores.draw;
   }
 
-  function finish(win, isDraw) {
+  function finish(win, isDraw, line) {
     gameOver = true;
-    highlightWin();
+    if (line) line.forEach(i => cells[i].classList.add('win'));
+
     if (win === HUMAN) {
       statusEl.textContent = 'You win! 🎉';
       scores.X++;
@@ -194,7 +225,7 @@
       const res = await fetch('/api/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ board }),
+        body: JSON.stringify({ board, size, difficulty: difficultySelect.value }),
       });
       if (!res.ok) throw new Error('Bad response from server');
       const data = await res.json();
@@ -203,7 +234,7 @@
       render();
 
       if (data.winner || data.is_draw) {
-        finish(data.winner, data.is_draw);
+        finish(data.winner, data.is_draw, data.line);
       } else {
         statusEl.textContent = "Your move. You're X";
       }
@@ -216,17 +247,19 @@
   }
 
   function newGame() {
-    board = Array(9).fill(null);
+    size = parseInt(sizeSelect.value, 10);
+    board = Array(size * size).fill(null);
     gameOver = false;
     busy = false;
     statusEl.textContent = "Your move. You're X";
-    cells.forEach(cell => cell.classList.remove('win'));
+    buildBoard();
     render();
   }
 
   resetBtn.addEventListener('click', newGame);
+  sizeSelect.addEventListener('change', newGame);
+  difficultySelect.addEventListener('change', newGame);
 
-  buildBoard();
   newGame();
 })();
 </script>
