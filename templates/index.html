@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tic-Tac-Toe</title>
+<style>
+  :root {
+    --bg: #0f0f14;
+    --panel: #1e1e26;
+    --line: #2a2a34;
+    --x-color: #f0f0f0;
+    --o-color: #50c878;
+    --win-color: #dc4646;
+    --text: #f0f0f0;
+    --muted: #969696;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', ui-monospace, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px;
+    gap: 14px;
+  }
+  h1 {
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--muted);
+  }
+  #status {
+    font-size: 0.95rem;
+    color: var(--text);
+    min-height: 1.4em;
+    text-align: center;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(3, 92px);
+    grid-template-rows: repeat(3, 92px);
+    gap: 6px;
+    background: var(--line);
+    padding: 6px;
+    border-radius: 8px;
+  }
+  .cell {
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 4px;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .cell:hover:not(.filled) { background: #262633; }
+  .cell.x { color: var(--x-color); }
+  .cell.o { color: var(--o-color); }
+  .cell.win { background: rgba(220,70,70,0.18); }
+  .cell.win.x, .cell.win.o { color: var(--win-color); }
+  #controls { display: flex; gap: 10px; align-items: center; }
+  button {
+    font-family: inherit;
+    background: var(--o-color);
+    color: #0f0f14;
+    border: none;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button:hover:not(:disabled) { opacity: 0.85; }
+  #scoreboard { display: flex; gap: 18px; font-size: 0.8rem; color: var(--muted); }
+  #scoreboard span.value { color: var(--text); font-weight: bold; margin-left: 4px; }
+  #hint { font-size: 0.75rem; color: var(--muted); text-align: center; max-width: 360px; }
+</style>
+</head>
+<body>
+  <h1>Tic-Tac-Toe</h1>
+  <div id="status">Your move, You're X</div>
+
+  <div id="board"></div>
+
+  <div id="controls">
+    <button id="reset-btn">New Game</button>
+  </div>
+
+  <div id="scoreboard">
+    <div>You <span class="value" id="score-x">0</span></div>
+    <div>AI <span class="value" id="score-o">0</span></div>
+    <div>Draws <span class="value" id="score-draw">0</span></div>
+  </div>
+
+  <div id="hint">You're X, AI is O. </div>
+
+<script>
+(() => {
+  const HUMAN = 'X', AI = 'O';
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const resetBtn = document.getElementById('reset-btn');
+  const scoreXEl = document.getElementById('score-x');
+  const scoreOEl = document.getElementById('score-o');
+  const scoreDrawEl = document.getElementById('score-draw');
+
+  const LINES = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6],
+  ];
+
+  let board = Array(9).fill(null);
+  let gameOver = false;
+  let busy = false; // true while waiting on the backend
+  let cells = [];
+  let scores = { X: 0, O: 0, draw: 0 };
+
+  function buildBoard() {
+    boardEl.innerHTML = '';
+    cells = [];
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.index = i;
+      cell.addEventListener('click', () => onCellClick(i));
+      boardEl.appendChild(cell);
+      cells.push(cell);
+    }
+  }
+
+  function render() {
+    board.forEach((val, i) => {
+      const cell = cells[i];
+      cell.textContent = val || '';
+      cell.classList.toggle('filled', !!val);
+      cell.classList.toggle('x', val === HUMAN);
+      cell.classList.toggle('o', val === AI);
+    });
+  }
+
+  function getWinLine(b) {
+    for (const [a, bb, c] of LINES) {
+      if (b[a] && b[a] === b[bb] && b[a] === b[c]) return [a, bb, c];
+    }
+    return null;
+  }
+
+  function highlightWin() {
+    const line = getWinLine(board);
+    if (line) line.forEach(i => cells[i].classList.add('win'));
+  }
+
+  function updateScoreboard() {
+    scoreXEl.textContent = scores.X;
+    scoreOEl.textContent = scores.O;
+    scoreDrawEl.textContent = scores.draw;
+  }
+
+  function finish(win, isDraw) {
+    gameOver = true;
+    highlightWin();
+    if (win === HUMAN) {
+      statusEl.textContent = 'You win! 🎉';
+      scores.X++;
+    } else if (win === AI) {
+      statusEl.textContent = 'AI wins.';
+      scores.O++;
+    } else if (isDraw) {
+      statusEl.textContent = "It's a draw.";
+      scores.draw++;
+    }
+    updateScoreboard();
+  }
+
+  async function onCellClick(i) {
+    if (gameOver || busy || board[i] !== null) return;
+
+    board[i] = HUMAN;
+    render();
+    busy = true;
+    statusEl.textContent = 'AI is thinking…';
+
+    try {
+      const res = await fetch('/api/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board }),
+      });
+      if (!res.ok) throw new Error('Bad response from server');
+      const data = await res.json();
+
+      board = data.board;
+      render();
+
+      if (data.winner || data.is_draw) {
+        finish(data.winner, data.is_draw);
+      } else {
+        statusEl.textContent = "Your move. You're X";
+      }
+    } catch (err) {
+      statusEl.textContent = 'Connection error';
+      console.error(err);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function newGame() {
+    board = Array(9).fill(null);
+    gameOver = false;
+    busy = false;
+    statusEl.textContent = "Your move. You're X";
+    render();
+  }
+
+  resetBtn.addEventListener('click', newGame);
+
+  buildBoard();
+  newGame();
+})();
+</script>
+</body>
+</html>
