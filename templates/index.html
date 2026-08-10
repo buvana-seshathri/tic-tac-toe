@@ -87,7 +87,7 @@
 </head>
 <body>
   <h1>Tic-Tac-Toe</h1>
-  <div id="status">Your move, You're X</div>
+  <div id="status">Your move — you're X</div>
 
   <div id="board"></div>
 
@@ -101,7 +101,7 @@
     <div>Draws <span class="value" id="score-draw">0</span></div>
   </div>
 
-  <div id="hint">You're X, AI is O. </div>
+  <div id="hint">You're X, AI is O.</div>
 
 <script>
 (() => {
@@ -220,6 +220,7 @@
     gameOver = false;
     busy = false;
     statusEl.textContent = "Your move. You're X";
+    cells.forEach(cell => cell.classList.remove('win'));
     render();
   }
 
